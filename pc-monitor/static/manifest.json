@@ -1,0 +1,32 @@
+{
+  "name": "电脑监控",
+  "short_name": "电脑监控",
+  "description": "局域网内实时查看电脑的 CPU / GPU / 内存 / 显存 / 磁盘 / 网络占用与温度",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0e13",
+  "theme_color": "#0a0e13",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# 换行符保持原样，避免 Windows / Linux 之间来回改坏脚本
+* text=auto eol=lf
+
+# .bat 必须是 GBK + CRLF，否则中文乱码、cmd 解析出错 —— 禁止任何换行/编码转换
+*.bat -text
+*.ps1 -text
+
+# 二进制
+*.ico binary
+*.png binary
+*.apk binary
+*.zip binary
+*.exe binary

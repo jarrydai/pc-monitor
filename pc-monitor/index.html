@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0e13">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="电脑监控">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<title>电脑监控</title>
+<style>
+  :root{
+    --bg:#0a0e13; --card:#121a23; --card2:#0e151d; --line:#1d2733;
+    --txt:#e9eff6; --dim:#8494a6; --dimmer:#546273;
+    --cpu:#2dd4bf; --gpu:#a78bfa; --mem:#60a5fa; --vram:#fbbf24; --io:#38bdf8;
+    --warn:#fbbf24; --bad:#f87171; --ok:#34d399;
+    --gs:66px;              /* 环形表盘直径 */
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+    font-size:14px;line-height:1.35;-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;padding:0 10px calc(10px + env(safe-area-inset-bottom));
+    background:radial-gradient(120% 50% at 50% 0%,#131f2a 0%,rgba(10,14,19,0) 65%),var(--bg)}
+  .wrap{max-width:520px;margin:0 auto}
+
+  /* header */
+  header{display:flex;align-items:center;justify-content:space-between;padding:10px 3px 8px;gap:8px}
+  .host{display:flex;align-items:center;gap:7px;min-width:0}
+  .host b{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;max-width:200px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none;
+    box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:pulse 2s infinite}
+  .dot.off{background:var(--bad);animation:none;box-shadow:none}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}
+    70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+  .hright{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+  .hright b{color:var(--txt);font-weight:500;font-variant-numeric:tabular-nums;font-size:13px}
+  #status{color:var(--ok)}
+  #status.bad{color:var(--bad)}
+
+  /* grid */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tile{position:relative;background:linear-gradient(180deg,var(--card),var(--card2));
+    border:1px solid var(--line);border-radius:14px;padding:9px 11px;min-width:0;overflow:hidden}
+  .tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+    background:var(--a,transparent);opacity:.9}
+  #tCores,#tIo,#tProcs{grid-column:span 2}
+
+  .th{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px}
+  .tn{font-size:10.5px;letter-spacing:.8px;color:var(--dim);font-weight:500;
+    display:flex;align-items:center;gap:5px;white-space:nowrap}
+  .tn i{width:5px;height:5px;border-radius:1.5px;background:var(--a);display:block}
+  .tp{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--dim);
+    padding:1px 5px;border-radius:5px;background:rgba(255,255,255,.05);white-space:nowrap}
+  .tp.hot{color:#fca5a5;background:rgba(248,113,113,.14)}
+  .tp.warm{color:#fcd34d;background:rgba(251,191,36,.13)}
+  .tp.cool{color:#6ee7b7;background:rgba(52,211,153,.12)}
+  .tp.na{color:#3f4d5c;background:rgba(255,255,255,.03)}
+
+  /* ---- 环形占比表盘 ---- */
+  .kbody{display:flex;align-items:center;gap:10px;min-width:0}
+  .gauge{position:relative;width:var(--gs);height:var(--gs);flex:none}
+  .gauge svg{width:100%;height:100%;transform:rotate(-90deg);display:block;overflow:visible}
+  .gauge circle{fill:none;stroke-width:8;stroke-linecap:round}
+  .gauge .trk{stroke:rgba(255,255,255,.075)}
+  .gauge .fil{stroke:var(--a);stroke-dasharray:257.6;stroke-dashoffset:257.6;
+    filter:drop-shadow(0 0 3px rgba(0,0,0,.35));
+    transition:stroke-dashoffset .55s cubic-bezier(.22,.61,.36,1),stroke .3s}
+  .gv{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    gap:1px;line-height:1;font-variant-numeric:tabular-nums}
+  .gv b{font-size:calc(var(--gs) * .34);font-weight:600;letter-spacing:-.5px}
+  .gv em{font-size:calc(var(--gs) * .17);font-style:normal;color:var(--dim);
+    position:relative;top:calc(var(--gs) * .05)}
+
+  .kmeta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .km1{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt)}
+  .km2{font-size:10px;color:var(--dimmer);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+
+  .sp{width:100%;min-width:0;max-width:100%;height:24px;display:block;margin-top:6px;flex:none}
+  .grid>.tile>.sp{flex:1;min-height:16px}
+
+  /* cores */
+  .cores{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:5px 10px}
+  .core{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--dimmer);
+    font-variant-numeric:tabular-nums}
+  .core span:first-child{width:13px;flex:none}
+  .core i{flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+  .core i b{display:block;height:100%;width:0;background:var(--cpu);border-radius:2px;
+    transition:width .4s ease,background .3s}
+  .core span:last-child{width:25px;text-align:right;color:var(--dim);flex:none}
+
+  /* io */
+  .io{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+  .io div{display:flex;align-items:baseline;justify-content:space-between;gap:4px;
+    font-size:9.5px;color:var(--dimmer)}
+  .io div b{font-size:11.5px;color:var(--txt);font-weight:500;
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  /* procs */
+  .proc{display:flex;align-items:center;gap:6px;font-size:10.5px;padding:2.5px 0;
+    border-top:1px solid rgba(255,255,255,.04);font-variant-numeric:tabular-nums}
+  .proc:first-child{border-top:none}
+  .proc .rk{width:10px;color:var(--dimmer);font-size:9px;flex:none;text-align:center}
+  .proc .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .proc .pc{width:38px;text-align:right;color:var(--cpu);flex:none}
+  .proc .pm{width:48px;text-align:right;color:var(--dim);flex:none;font-size:9.5px}
+
+  footer{display:flex;align-items:center;justify-content:flex-start;gap:14px;
+    padding:6px 4px 0;font-size:9.5px;color:var(--dimmer);flex-wrap:wrap}
+  footer b{color:var(--dim);font-weight:500;font-variant-numeric:tabular-nums}
+
+  /* 断连提示 */
+  .offline{position:fixed;left:0;right:0;top:0;padding:6px;text-align:center;font-size:11.5px;
+    background:#7f1d1d;color:#fff;transform:translateY(-110%);transition:transform .25s;z-index:9}
+  .offline.show{transform:translateY(0)}
+
+  /* ---------- 横屏：一屏内展示全部（指标卡占更大版面） ---------- */
+  @media (orientation:landscape){
+    body{padding:0 8px 4px;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+    .wrap{max-width:none;flex:1;display:flex;flex-direction:column;width:100%;min-height:0}
+    header{padding:6px 3px 6px}
+    .host b{font-size:13px;max-width:300px}
+    .hright{font-size:10.5px}
+    .hright b{font-size:13px}
+    .grid{grid-template-columns:repeat(4,1fr);gap:7px;flex:1;min-height:0;
+      grid-template-rows:minmax(0,1.25fr) minmax(0,.95fr)}
+    /* 下排：核心占用占 2 列（4 列排开，行数更少不易被裁），进程占 1 列 */
+    #tCores{grid-column:span 2}
+    #tIo{grid-column:span 1}
+    #tProcs{grid-column:span 1}
+    .grid>.tile{display:flex;flex-direction:column;justify-content:center;
+      min-height:0;overflow:hidden}
+    .grid>.tile>.th{flex:none}
+    .grid>.tile>.cores,.grid>.tile>.io{flex:1;align-content:center}
+    .grid>.tile>#procs{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;overflow:hidden}
+    .tile{padding:8px 10px;border-radius:11px}
+    .tn{font-size:10px;letter-spacing:.5px}
+    .tp{font-size:10.5px}
+    .gv b{letter-spacing:-.3px}
+    .km1{font-size:12px}
+    .km2{font-size:9px}
+    .cores{grid-template-columns:repeat(4,1fr);gap:3px 8px;align-content:start}
+    .core{font-size:8px}
+    .core span:first-child{width:11px}
+    .core span:last-child{width:22px}
+    .io{grid-template-columns:1fr 1fr;gap:4px 8px}
+    .io div{flex-direction:column;align-items:flex-start;gap:1px;font-size:8.5px}
+    .io div b{font-size:12px}
+    .proc{font-size:9.5px;padding:1.5px 0;gap:4px}
+    .proc .rk{width:8px}
+    .proc .pc{width:30px}
+    .proc .pm{width:40px;font-size:8.5px}
+    footer{padding-top:3px;font-size:9px;gap:12px}
+  }
+
+  /* 手机横屏（矮屏）：放大一档字号，指标卡撑满 */
+  @media (orientation:landscape) and (max-height:470px) and (max-width:860px){
+    :root{--gs:60px}
+    .host b{font-size:14px}
+    .hright b{font-size:14px}
+    .tn{font-size:11px}
+    .tp{font-size:11px}
+    .km1{font-size:13px}
+    .km2{font-size:9.5px}
+    .kbody{gap:10px}
+    .cores{grid-template-columns:repeat(4,1fr);gap:2px 8px;align-content:start}
+    .core{font-size:9.5px;line-height:1.2}
+    .core i{height:3px}
+    .core span:first-child{width:11px}
+    .core span:last-child{width:24px}
+    .io{gap:6px 10px}
+    .io div{font-size:9.5px}
+    .io div b{font-size:13px}
+    .proc{font-size:10.5px;padding:2px 0;gap:4px}
+    .proc .rk{display:none}          /* 窄卡让出宽度给进程名 */
+    .proc .pc{width:30px}
+    .proc .pm{width:36px;font-size:9.5px}
+    .tile{padding:8px 10px}
+  }
+  @media (orientation:landscape) and (max-height:340px){
+    :root{--gs:58px}
+    .km2{display:none}
+  }
+  @media (orientation:landscape) and (max-height:320px){
+    .sp{display:none}
+  }
+
+  /* 矮横屏（≤380px 高，小米6 等）：进一步压缩间距，防止核心/进程行被裁 */
+  @media (orientation:landscape) and (max-height:380px){
+    .cores{gap:2px 8px}
+    .grid>.tile>.th{margin-bottom:3px}
+    .proc{font-size:10px;padding:1px 0;gap:3px}
+    .proc .pc{width:28px}
+    .proc .pm{width:34px;font-size:9px}
+  }
+
+  /* ---------- 平板 / 大屏（小米平板 4 等） ---------- */
+  @media (orientation:landscape) and (min-width:700px){
+    :root{--gs:108px}
+    body{padding:0 14px 8px;overflow:hidden;display:flex;flex-direction:column;
+      height:100vh;box-sizing:border-box}
+    .wrap{max-width:none;flex:1;display:flex;flex-direction:column;width:100%}
+    .grid{grid-template-columns:repeat(12,1fr);gap:10px;flex:1;
+      grid-template-rows:minmax(0,1.3fr) minmax(0,.9fr)}
+    .grid > .tile{display:flex;flex-direction:column;justify-content:center;min-height:0;overflow:hidden}
+    .grid > .tile > .th{flex:none}
+    .grid > .tile > .cores,.grid > .tile > .io,.grid > .tile > #procs{flex:1;
+      align-content:center}
+    header{padding:12px 6px 10px}
+    .host b{font-size:17px;max-width:420px}
+    .hright{font-size:13px}
+    .hright b{font-size:16px}
+    .grid > .kpi{grid-column:span 3}
+    #tCores{grid-column:span 5}
+    #tIo{grid-column:span 3}
+    #tProcs{grid-column:span 4}
+    .tile{padding:13px 15px;border-radius:16px}
+    .tile::before{width:3px}
+    .tn{font-size:13px;letter-spacing:1px}
+    .tn i{width:7px;height:7px;border-radius:2px}
+    .tp{font-size:13px;padding:2px 7px;border-radius:7px}
+    .gauge circle{stroke-width:7}
+    .kbody{gap:14px}
+    .km1{font-size:16px}
+    .km2{font-size:11.5px}
+    .sp{height:44px;margin-top:8px}
+    .cores{grid-template-columns:repeat(4,1fr);gap:7px 16px}
+    .core{font-size:11px;gap:6px}
+    .core i{height:4px}
+    .core span:first-child{width:17px}
+    .core span:last-child{width:32px;font-size:10.5px}
+    .io{gap:9px 16px}
+    .io div{font-size:11px}
+    .io div b{font-size:15px}
+    .proc{font-size:12.5px;padding:4px 0}
+    .proc .rk{width:14px;font-size:10px}
+    .proc .pc{width:54px}
+    .proc .pm{width:68px;font-size:11px}
+    footer{font-size:11px;padding-top:8px}
+  }
+
+  /* 平板竖屏 */
+  @media (orientation:portrait) and (min-width:520px){
+    :root{--gs:80px}
+    .wrap{max-width:640px}
+    .grid{gap:10px}
+    .tile{padding:13px 15px;border-radius:16px}
+    .tn{font-size:12px}
+    .tp{font-size:12px}
+    .km1{font-size:15px}
+    .km2{font-size:11px}
+    .sp{height:36px}
+    .cores{grid-template-columns:repeat(4,1fr);gap:6px 14px}
+    .core{font-size:10px}
+    .io div b{font-size:14px}
+    .proc{font-size:11.5px;padding:4px 0}
+    .host b{font-size:17px}
+  }
+</style>
+</head>
+<body>
+<div class="offline" id="offline">连接已断开，正在重连…</div>
+<div class="wrap">
+  <header>
+    <div class="host"><i class="dot" id="dot"></i><b id="host">连接中…</b></div>
+    <div class="hright">
+      <span id="status">连接中</span>
+      <b id="clock">--:--:--</b>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- CPU -->
+    <section class="tile kpi" style="--a:var(--cpu)">
+      <div class="th">
+        <span class="tn"><i></i>CPU</span>
+        <span class="tp na" id="cpuTemp">—</span>
+      </div>
+      <div class="kbody">
+        <div class="gauge">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="trk" cx="50" cy="50" r="41"></circle>
+            <circle class="fil" id="cpuArc" cx="50" cy="50" r="41"></circle>
+          </svg>
+          <span class="gv"><b id="cpuPct">0</b><em>%</em></span>
+        </div>
+        <div class="kmeta">
+          <div class="km1" id="cpuSub">—</div>
+          <div class="km2" id="cpuHint">—</div>
+        </div>
+      </div>
+      <canvas class="sp" id="sCpu"></canvas>
+    </section>
+
+    <!-- GPU -->
+    <section class="tile kpi" style="--a:var(--gpu)">
+      <div class="th">
+        <span class="tn"><i></i>GPU</span>
+        <span class="tp na" id="gpuTemp">—</span>
+      </div>
+      <div class="kbody">
+        <div class="gauge">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="trk" cx="50" cy="50" r="41"></circle>
+            <circle class="fil" id="gpuArc" cx="50" cy="50" r="41"></circle>
+          </svg>
+          <span class="gv"><b id="gpuPct">0</b><em>%</em></span>
+        </div>
+        <div class="kmeta">
+          <div class="km1" id="gpuSub">—</div>
+          <div class="km2" id="gpuHint">—</div>
+        </div>
+      </div>
+      <canvas class="sp" id="sGpu"></canvas>
+    </section>
+
+    <!-- 内存 -->
+    <section class="tile kpi" style="--a:var(--mem)">
+      <div class="th">
+        <span class="tn"><i></i>内存</span>
+        <span class="tp" id="memBadge">RAM</span>
+      </div>
+      <div class="kbody">
+        <div class="gauge">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="trk" cx="50" cy="50" r="41"></circle>
+            <circle class="fil" id="memArc" cx="50" cy="50" r="41"></circle>
+          </svg>
+          <span class="gv"><b id="memPct">0</b><em>%</em></span>
+        </div>
+        <div class="kmeta">
+          <div class="km1" id="memSub">—</div>
+          <div class="km2" id="memHint">—</div>
+        </div>
+      </div>
+      <canvas class="sp" id="sMem"></canvas>
+    </section>
+
+    <!-- 显存 -->
+    <section class="tile kpi" style="--a:var(--vram)">
+      <div class="th">
+        <span class="tn"><i></i>显存</span>
+        <span class="tp" id="vramBadge">VRAM</span>
+      </div>
+      <div class="kbody">
+        <div class="gauge">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="trk" cx="50" cy="50" r="41"></circle>
+            <circle class="fil" id="vramArc" cx="50" cy="50" r="41"></circle>
+          </svg>
+          <span class="gv"><b id="vramPct">0</b><em>%</em></span>
+        </div>
+        <div class="kmeta">
+          <div class="km1" id="vramSub">—</div>
+          <div class="km2" id="vramHint">—</div>
+        </div>
+      </div>
+      <canvas class="sp" id="sVram"></canvas>
+    </section>
+
+    <!-- 核心 -->
+    <section class="tile" style="--a:var(--cpu)" id="tCores">
+      <div class="th">
+        <span class="tn"><i></i>核心占用</span>
+        <span class="tp" id="coreCount">—</span>
+      </div>
+      <div class="cores" id="cores"></div>
+    </section>
+
+    <!-- 网络 / 磁盘 -->
+    <section class="tile" style="--a:var(--io)" id="tIo">
+      <div class="th">
+        <span class="tn"><i></i>网络 / 磁盘</span>
+        <span class="tp" id="ioNote">—</span>
+      </div>
+      <div class="io">
+        <div><span>↓ 下载</span><b id="netDown">0</b></div>
+        <div><span>↑ 上传</span><b id="netUp">0</b></div>
+        <div><span>R 读取</span><b id="diskR">0</b></div>
+        <div><span>W 写入</span><b id="diskW">0</b></div>
+      </div>
+    </section>
+
+    <!-- 进程 -->
+    <section class="tile" style="--a:var(--dimmer)" id="tProcs">
+      <div class="th">
+        <span class="tn"><i></i>高占用进程</span>
+        <span class="tp">CPU / 内存</span>
+      </div>
+      <div id="procs"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>运行 <b id="uptime">—</b></span>
+    <span id="batWrap" style="display:none">电量 <b id="bat">—</b></span>
+    <span>采样 <b id="sample">—</b></span>
+    <span id="tempHint" style="display:none;color:#fbbf24">CPU 温度未启用 · 托盘右键「启用 CPU 温度」</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var HIST = 60;
+  var CIRC = 2 * Math.PI * 41;      // 环形周长
+  var hist = {cpu:[], gpu:[], mem:[], vram:[]};
+
+  function $(id){ return document.getElementById(id); }
+  var el = {
+    host:$("host"), dot:$("dot"), status:$("status"), clock:$("clock"), offline:$("offline"),
+    cpuPct:$("cpuPct"), cpuSub:$("cpuSub"), cpuHint:$("cpuHint"), cpuArc:$("cpuArc"),
+    cpuTemp:$("cpuTemp"), sCpu:$("sCpu"),
+    gpuPct:$("gpuPct"), gpuSub:$("gpuSub"), gpuHint:$("gpuHint"), gpuArc:$("gpuArc"),
+    gpuTemp:$("gpuTemp"), sGpu:$("sGpu"),
+    memPct:$("memPct"), memSub:$("memSub"), memHint:$("memHint"), memArc:$("memArc"),
+    memBadge:$("memBadge"), sMem:$("sMem"),
+    vramPct:$("vramPct"), vramSub:$("vramSub"), vramHint:$("vramHint"), vramArc:$("vramArc"),
+    vramBadge:$("vramBadge"), sVram:$("sVram"),
+    cores:$("cores"), coreCount:$("coreCount"),
+    netDown:$("netDown"), netUp:$("netUp"), diskR:$("diskR"), diskW:$("diskW"),
+    ioNote:$("ioNote"), procs:$("procs"), tempHint:$("tempHint"),
+    uptime:$("uptime"), bat:$("bat"), batWrap:$("batWrap"), sample:$("sample")
+  };
+
+  // ---------- 工具 ----------
+  function bytes(n, digits){
+    if(!n || n < 1) return "0 B";
+    var u = ["B","KB","MB","GB","TB"], i = 0;
+    while(n >= 1024 && i < u.length-1){ n /= 1024; i++; }
+    if(i === 0) return Math.round(n) + " B";
+    var d = (digits === undefined) ? (n >= 100 ? 0 : 1) : digits;
+    return n.toFixed(d) + " " + u[i];
+  }
+  function rate(n){
+    if(!n || n < 1) return "0 B/s";
+    var u = ["B/s","KB/s","MB/s","GB/s"], i = 0;
+    while(n >= 1024 && i < u.length-1){ n /= 1024; i++; }
+    return (i === 0 ? Math.round(n) : (n >= 100 ? Math.round(n) : n.toFixed(1))) + " " + u[i];
+  }
+  // 紧凑容量（窄卡片用）：25G/32G、7.4G/8G
+  function bc(n){
+    if(!n || n < 1) return "0B";
+    var u = ["B","K","M","G","T"], i = 0;
+    while(n >= 1024 && i < u.length-1){ n /= 1024; i++; }
+    var s = (i === 0 || n >= 10) ? String(Math.round(n)) : n.toFixed(1);
+    if(s.slice(-2) === ".0") s = s.slice(0, -2);
+    return s + u[i];
+  }
+  function cpuShort(n){
+    return n.replace(/\((R|TM)\)/g, "")
+            .replace(/^.*?Gen\s*/i, "")
+            .replace(/Intel\s+Core\s*/i, "")
+            .replace(/CPU\s*@.*/i, "")
+            .replace(/\s+/g, " ").trim();
+  }
+  // 显卡短名：RTX 3070 / UHD 770 / RX 6700 XT
+  function gpuShort(n){
+    if(!n) return "GPU";
+    var s = n.replace(/NVIDIA\s+|GeForce\s+|AMD\s+|Radeon\s+|Intel\(R\)\s+|Intel\s+|\(TM\)|\(R\)|Graphics\s+/gi, "")
+             .replace(/\s+/g, " ").trim();
+    return s || n;
+  }
+  function heat(p){ return p >= 85 ? "#f87171" : p >= 70 ? "#fbbf24" : null; }
+
+  // 环形占比：pct 0-100
+  function setGauge(arc, num, pct, baseColor){
+    pct = Math.max(0, Math.min(100, pct || 0));
+    arc.style.strokeDashoffset = (CIRC * (1 - pct/100)).toFixed(1);
+    arc.style.stroke = heat(pct) || baseColor;
+    num.textContent = Math.round(pct);
+    num.style.color = heat(pct) || "#e9eff6";
+  }
+  function clearGauge(arc, num){
+    arc.style.strokeDashoffset = CIRC;
+    num.textContent = "—";
+    num.style.color = "#3f4d5c";
+  }
+  function setTemp(node, t, approx){
+    if(t === null || t === undefined || isNaN(t)){
+      node.textContent = "—";
+      node.className = "tp na";
+      node.title = "温度不可用";
+      return false;
+    }
+    node.textContent = (approx ? "≈" : "") + Math.round(t) + "°C";
+    node.className = "tp " + (t >= 80 ? "hot" : t >= 65 ? "warm" : "cool");
+    node.title = approx ? "近似值" : "精确值";
+    return true;
+  }
+
+  // ---------- 迷你走势 ----------
+  function spark(cv, data, color){
+    var dpr = window.devicePixelRatio || 1;
+    var w = cv.clientWidth, h = cv.clientHeight;
+    if(!w || !h) return;
+    if(cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){
+      cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+    }
+    var ctx = cv.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+    if(data.length < 2) return;
+    var n = data.length, step = w / (HIST - 1), x0 = w - (n - 1) * step;
+    var pad = 1.5;
+    function y(v){ return h - Math.min(1, v/100) * (h - pad*2) - pad; }
+    var g = ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0, color + "55"); g.addColorStop(1, color + "00");
+    ctx.beginPath(); ctx.moveTo(x0, h);
+    for(var i=0;i<n;i++){ ctx.lineTo(x0 + i*step, y(data[i])); }
+    ctx.lineTo(x0 + (n-1)*step, h); ctx.closePath();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath();
+    for(var j=0;j<n;j++){ j ? ctx.lineTo(x0+j*step, y(data[j])) : ctx.moveTo(x0+j*step, y(data[j])); }
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.stroke();
+  }
+  function push(arr, v){ arr.push(v); if(arr.length > HIST) arr.shift(); }
+  function drawAll(){
+    spark(el.sCpu, hist.cpu, "#2dd4bf");
+    spark(el.sGpu, hist.gpu, "#a78bfa");
+    spark(el.sMem, hist.mem, "#60a5fa");
+    spark(el.sVram, hist.vram, "#fbbf24");
+  }
+
+  // ---------- 核心条 ----------
+  var coreNodes = null;
+  function buildCores(n){
+    var html = "";
+    for(var i=0;i<n;i++){
+      html += '<div class="core"><span>C'+i+'</span><i><b></b></i><span>0%</span></div>';
+    }
+    el.cores.innerHTML = html;
+    coreNodes = [];
+    var kids = el.cores.children;
+    for(var k=0;k<kids.length;k++){
+      coreNodes.push({bar: kids[k].getElementsByTagName("b")[0], txt: kids[k].lastChild});
+    }
+  }
+  function renderCores(arr){
+    if(!coreNodes || coreNodes.length !== arr.length) buildCores(arr.length);
+    for(var i=0;i<arr.length;i++){
+      var v = arr[i], n = coreNodes[i];
+      n.bar.style.width = Math.max(0, Math.min(100, v)) + "%";
+      n.bar.style.background = heat(v) || "#2dd4bf";
+      n.txt.textContent = Math.round(v) + "%";
+      n.txt.style.color = v >= 85 ? "#f87171" : "#8494a6";
+    }
+  }
+
+  // ---------- 进程 ----------
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function renderProcs(list){
+    if(!list || !list.length){
+      el.procs.innerHTML = '<div class="proc"><div class="nm">暂无数据</div></div>';
+      return;
+    }
+    var html = "";
+    for(var i=0;i<list.length;i++){
+      var p = list[i];
+      html += '<div class="proc"><div class="rk">'+(i+1)+'</div>' +
+              '<div class="nm">'+esc(p.name)+'</div>' +
+              '<div class="pc">'+p.cpu.toFixed(1)+'%</div>' +
+              '<div class="pm">'+bc(p.mem)+'</div></div>';
+    }
+    el.procs.innerHTML = html;
+  }
+
+  function uptime(sec){
+    var d = Math.floor(sec/86400), h = Math.floor(sec%86400/3600), m = Math.floor(sec%3600/60);
+    if(d) return d+"天"+h+"小时";
+    if(h) return h+"小时"+m+"分";
+    return m+"分钟";
+  }
+
+  // ---------- 渲染 ----------
+  var tempOK = true;
+  function render(d){
+    if(!d || d.error) throw new Error((d && d.error) || "empty");
+
+    el.host.textContent = d.host;
+    setOnline(true);
+
+    // CPU
+    var c = d.cpu;
+    setGauge(el.cpuArc, el.cpuPct, c.percent, "#2dd4bf");
+    setTemp(el.cpuTemp, c.temp, c.temp_approx);
+    el.cpuSub.textContent = c.freq ? (c.freq/1000).toFixed(2)+" GHz" : (c.count + " 线程");
+    el.cpuHint.textContent = cpuShort(c.name);
+    renderCores(c.cores);
+    el.coreCount.textContent = c.count + " 线程";
+    tempOK = (c.temp !== null && c.temp !== undefined);
+    el.tempHint.style.display = tempOK ? "none" : "";
+    push(hist.cpu, c.percent);
+
+    // GPU
+    var g = d.gpu;
+    if(g){
+      setGauge(el.gpuArc, el.gpuPct, g.percent || 0, "#a78bfa");
+      setTemp(el.gpuTemp, g.temp, false);
+      el.gpuSub.textContent = (g.mem_percent !== null && g.mem_percent !== undefined)
+        ? "显存 " + Math.round(g.mem_percent) + "%"
+        : (g.mem_used ? "显存 " + bc(g.mem_used) : "显存 —");
+      el.gpuHint.textContent = gpuShort(g.name);
+      push(hist.gpu, g.percent || 0);
+    } else {
+      clearGauge(el.gpuArc, el.gpuPct);
+      setTemp(el.gpuTemp, null);
+      el.gpuSub.textContent = "未检测到";
+      el.gpuHint.textContent = "无可用 GPU";
+    }
+
+    // 内存
+    var m = d.mem;
+    setGauge(el.memArc, el.memPct, m.percent, "#60a5fa");
+    el.memSub.textContent = bc(m.used) + "/" + bc(m.total);
+    el.memHint.textContent = "可用 " + bc(m.total - m.used);
+    el.memBadge.textContent = bytes(m.total, 0);
+    push(hist.mem, m.percent);
+
+    // 显存
+    if(g && (g.mem_used || g.mem_total)){
+      var vp = (g.mem_percent !== null && g.mem_percent !== undefined) ? g.mem_percent : 0;
+      setGauge(el.vramArc, el.vramPct, vp, "#fbbf24");
+      el.vramSub.textContent = bc(g.mem_used) + (g.mem_total ? "/" + bc(g.mem_total) : "");
+      el.vramHint.textContent = g.mem_total
+        ? ("剩 " + bc(g.mem_total - g.mem_used))
+        : (g.shared ? "共享内存" : "独占显存");
+      el.vramBadge.textContent = g.mem_total ? bytes(g.mem_total, 0) : "VRAM";
+      push(hist.vram, vp);
+    } else {
+      clearGauge(el.vramArc, el.vramPct);
+      el.vramSub.textContent = "未检测到";
+      el.vramHint.textContent = "—";
+      el.vramBadge.textContent = "VRAM";
+    }
+
+    // IO
+    el.netDown.textContent = rate(d.net.down_bps);
+    el.netUp.textContent = rate(d.net.up_bps);
+    el.diskR.textContent = rate(d.disk.read_bps);
+    el.diskW.textContent = rate(d.disk.write_bps);
+    el.ioNote.textContent = "C: " + d.disk.percent.toFixed(0) + "%";
+
+    renderProcs(d.procs);
+    el.uptime.textContent = uptime(d.uptime);
+    if(d.battery){
+      el.batWrap.style.display = "";
+      el.bat.textContent = Math.round(d.battery.percent) + "%" + (d.battery.plugged ? " 充电中" : "");
+    } else {
+      el.batWrap.style.display = "none";
+    }
+    el.sample.textContent = new Date(d.ts * 1000).toLocaleTimeString("zh-CN", {hour12:false});
+
+    drawAll();
+  }
+
+  // ---------- 连接状态 ----------
+  var fails = 0, online = null;
+  function setOnline(ok){
+    if(online === ok) return;
+    online = ok;
+    el.dot.className = "dot" + (ok ? "" : " off");
+    el.status.textContent = ok ? "已连接" : "重连中";
+    el.status.className = ok ? "" : "bad";
+    el.offline.className = "offline" + (ok ? "" : " show");
+    // 在 App 内运行时，断连交给原生层切换时钟页
+    if(!ok && window.PCMBridge && window.PCMBridge.onOffline){
+      try { window.PCMBridge.onOffline(); } catch(e) {}
+    }
+  }
+
+  var timer = null, stopped = false;
+
+  function schedule(ms){
+    clearTimeout(timer);
+    if(stopped) return;
+    timer = setTimeout(poll, ms);
+  }
+
+  function poll(){
+    if(stopped) return;
+    var ctl = null, to = null;
+    try { ctl = new AbortController(); } catch(e) {}
+    to = setTimeout(function(){ if(ctl) ctl.abort(); }, 6000);
+
+    var opts = {cache:"no-store"};
+    if(ctl) opts.signal = ctl.signal;
+
+    fetch("/api/stats?_=" + Date.now(), opts)
+      .then(function(r){
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function(d){
+        clearTimeout(to);
+        fails = 0;
+        render(d);
+        schedule(1000);          // 上一帧完成后再排下一次，避免请求堆积
+      })
+      .catch(function(){
+        clearTimeout(to);
+        fails++;
+        if(fails >= 2) setOnline(false);   // 单次抖动不提示，连续 2 次才判定断线
+        schedule(Math.min(3000, 600 * fails));
+      });
+  }
+
+  // 页面在后台时暂停请求，回到前台立即刷新
+  document.addEventListener("visibilitychange", function(){
+    if(document.hidden){
+      stopped = true;
+      clearTimeout(timer);
+    } else {
+      stopped = false;
+      clearTimeout(timer);
+      poll();
+    }
+  });
+
+  window.addEventListener("resize", function(){ setTimeout(drawAll, 60); });
+  window.addEventListener("orientationchange", function(){ setTimeout(drawAll, 250); });
+
+  (function clock(){
+    el.clock.textContent = new Date().toLocaleTimeString("zh-CN", {hour12:false});
+    setTimeout(clock, 1000);
+  })();
+
+  poll();
+})();
+</script>
+</body>
+</html>

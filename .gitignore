@@ -1,0 +1,46 @@
+# ---------------- Python ----------------
+__pycache__/
+*.py[cod]
+*.spec
+.venv/
+venv/
+
+# ---------------- 运行时产物（每台机器自动生成） ----------------
+pc-monitor/pcmonitor.log
+pc-monitor/*.log
+pc-monitor/server.pid
+pc-monitor/.temp_uac_tried
+
+# ---------------- 打包输出 ----------------
+pc-monitor/dist/
+pc-monitor/build_tmp/
+pc-monitor/build_staging/
+build/
+dist/
+
+# ---------------- 第三方二进制组件（体积大 / 有独立许可） ----------------
+# LibreHardwareMonitor：请自行下载解压到 pc-monitor/sensors/lhm
+pc-monitor/sensors/lhm/
+pc-monitor/sensors/lhm.zip
+
+# ---------------- Android 构建工具链与产物 ----------------
+android-build/jdk/
+android-build/sdk/
+android-build/dl/
+android-build/out/
+android-build/debug.keystore
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# ---------------- 编辑器 / 系统 ----------------
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---------------- 本地助手数据 ----------------
+.workbuddy/
