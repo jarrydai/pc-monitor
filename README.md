@@ -1,5 +1,8 @@
 # PC Monitor · 用手机实时看电脑资源
 
+[![release](https://img.shields.io/github/v/release/jarrydai/pc-monitor?label=release)](https://github.com/jarrydai/pc-monitor/releases/latest)
+[![license](https://img.shields.io/github/license/jarrydai/pc-monitor)](LICENSE)
+
 在 Windows 上跑一个小服务，手机 / 平板连同一个 WiFi 用浏览器打开，就能实时看到这台电脑的
 CPU、GPU、内存、显存、温度、磁盘、网络和占用最高的进程。Windows 右下角还会常驻一个托盘图标，
 鼠标悬停即可看占用，右键打开页面 / 启用温度传感器 / 退出。
@@ -12,6 +15,19 @@ CPU、GPU、内存、显存、温度、磁盘、网络和占用最高的进程�
 │  http://192.168.1.107:8000   1 秒刷新一次快照 │
 └──────────────────────────────────────────────┘
 ```
+
+## 下载安装
+
+不想折腾源码的话，直接到 **[Releases](https://github.com/jarrydai/pc-monitor/releases/latest)** 下载现成的包：
+
+| 文件 | 平台 | 大小 | 说明 |
+| --- | --- | --- | --- |
+| `PCMonitor-v1.0.0-windows.exe` | Windows 10/11 x64 | 15 MB | 单文件，双击即用，内置网页与温度传感器组件 |
+| `PCMonitor-v1.0.0-windows-full.zip` | Windows 10/11 x64 | 22 MB | 完整分发包，解压后运行 `PCMonitor.exe` |
+| `PCMonitor-v1.0.0-android.apk` | Android 7.0+ | 78 KB | 安卓 App，自签名，安装时允许「未知来源」 |
+
+电脑端启动后是静默托盘运行，首次会弹一次 UAC 启用 CPU 温度传感器，点【是】即可。
+手机连同一个 WiFi，打开 `http://<电脑IP>:8000`。
 
 ## 特性
 
