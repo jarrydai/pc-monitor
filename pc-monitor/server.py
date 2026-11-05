@@ -443,6 +443,46 @@ def port_in_use(port):
         s.close()
 
 
+def _another_instance_running():
+    """pid 文件里记录的进程还活着（且像本程序）→ 已有实例在跑"""
+    try:
+        with open(PID_FILE) as f:
+            pid = int(f.read().strip())
+    except Exception:
+        return False
+    if pid == os.getpid():
+        return False
+    try:
+        name = psutil.Process(pid).name().lower()
+    except Exception:
+        return False
+    return "pcmonitor" in name or name.startswith("python")
+
+
+def _bind_server(wanted):
+    """绑定端口；被系统保留（WinError 10013）或被占用（10048）时自动换下一个。
+
+    Hyper-V / WSL 的 winnat 服务每次开机可能随机保留一段端口，正好盖住常用端口，
+    表现为「昨天还好好的，今天打开报 WinError 10013」。
+    返回 (server, 实际端口)；全部失败返回 (None, wanted)。
+    """
+    candidates = [wanted]
+    candidates += [wanted + i for i in range(1, 21)]       # 8001..8020
+    candidates += [9000 + i for i in range(1, 21)]         # 9001..9020
+    last_err = None
+    for p in candidates:
+        try:
+            return ThreadingHTTPServer(("0.0.0.0", p), Handler), p
+        except OSError as e:
+            last_err = e
+            if getattr(e, "winerror", e.errno) in (10013, 10048, 13, 98):
+                _log("端口 %d 绑定失败（%s），尝试下一个…" % (p, e))
+                continue
+            break
+    _log("所有备用端口都绑定失败，最后错误: %r" % last_err)
+    return None, wanted
+
+
 def write_pid():
     try:
         with open(PID_FILE, "w", encoding="utf-8") as f:
@@ -885,9 +925,9 @@ def main():
         return 0 if ok else 1
 
     # ---------------- 正常启动 ----------------
-    # 单实例保护：端口已被占用直接退出（避免双击两次起两个进程）
-    if port_in_use(PORT):
-        _log("服务已经在运行（端口 %d 被占用），本次启动跳过。" % PORT)
+    # 单实例保护：pid 文件里记录的进程还活着，或端口已被占用，就不再起第二个
+    if _another_instance_running() or port_in_use(PORT):
+        _log("服务已经在运行（pid 文件有效或端口 %d 被占用），本次启动跳过。" % PORT)
         if open_browser:
             _open_url("http://127.0.0.1:%d/" % PORT)
         return 0
@@ -908,9 +948,16 @@ def main():
         time.sleep(0.05)
 
     global _SRV
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    wanted_port = PORT
+    srv, PORT = _bind_server(wanted_port)
+    if srv is None:
+        _log("端口 %d 及所有备用端口都绑定失败，程序退出。" % wanted_port)
+        return 1
     srv.daemon_threads = True
     _SRV = srv
+    if PORT != wanted_port:
+        _log("注意：端口 %d 被系统保留或占用（常见于 Hyper-V / WSL 的 winnat"
+             "随机保留端口段），已自动改用 %d。" % (wanted_port, PORT))
 
     line = "=" * 58
     _log(line)
@@ -929,6 +976,14 @@ def main():
     _log(line)
 
     tray = _start_tray() if want_tray else None
+    if tray and PORT != wanted_port:
+        try:
+            ip0 = (lan_ips() or ["127.0.0.1"])[0]
+            tray.notify("端口已自动更换",
+                        "原端口 %d 被系统保留，已改用 %d。手机请访问 http://%s:%d"
+                        % (wanted_port, PORT, ip0, PORT))
+        except Exception:
+            pass
     if tray and quiet:
         try:
             import tray as traymod
