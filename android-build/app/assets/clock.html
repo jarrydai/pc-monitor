@@ -25,11 +25,16 @@
     font-variant-numeric:tabular-nums;
     background:linear-gradient(180deg,#ffffff,#a8c4d8);
     -webkit-background-clip:text;background-clip:text;color:transparent}
-  .wx .desc{font-size:min(2.8vh,1.4vw);color:#9fb4c6;letter-spacing:.06em;white-space:nowrap}
+  .wx .desc{font-size:min(2.8vh,1.4vw);color:#9fb4c6;letter-spacing:.06em;white-space:nowrap;
+    display:flex;align-items:center;justify-content:center;gap:.35em}
   .wx .meta{font-size:min(2.2vh,1.1vw);color:#546273;letter-spacing:.04em;
     white-space:nowrap;line-height:1.5}
   .wx .city{font-size:min(2.2vh,1.1vw);color:#6b8199;letter-spacing:.12em;margin-top:.6vh;
-    white-space:nowrap}
+    white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:.3em}
+  /* 状态文字与城市名前的小图案 */
+  .wx .desc .ico svg,.wx .city .ico svg{width:1.15em;height:1.15em;display:block;
+    filter:none;overflow:visible}
+  .wx .desc .ico,.wx .city .ico{display:inline-flex;align-items:center;flex:none}
 
   /* ================= 右：时间 / 日期 ================= */
   .main{display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -262,8 +267,25 @@
   var wxLat = null, wxLon = null, wxCityName = null, wxSource = "";
   var wxTimer = null, wxBusy = false, nativeInjected = false, geoTried = false;
 
+  function esc(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  // 定位大头针图案，放在城市名前
+  function pinSvg(){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="1.8" ' +
+           'stroke-linecap="round" stroke-linejoin="round">' +
+           '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/>' +
+           '<circle cx="12" cy="10" r="2.4"/></svg>';
+  }
+
   function cityLabel(){
     return wxCityName || (wxLat !== null ? "当前位置" : (wxSource || "定位中…"));
+  }
+
+  function setCity(){
+    elCity.innerHTML = '<span class="ico">' + pinSvg() + '</span>' + esc(cityLabel());
   }
 
   function wxUrl(lat, lon){
@@ -279,13 +301,14 @@
     var w = WMO[c.weather_code] || ["—","cloud"];
     elIcon.innerHTML = iconSvg(w[1]);
     elTemp.textContent = Math.round(c.temperature_2m) + "°";
-    elDesc.textContent = w[0];
+    // 气象状态：小图案 + 文字
+    elDesc.innerHTML = '<span class="ico">' + iconSvg(w[1]) + '</span>' + esc(w[0]);
     var hi = day.temperature_2m_max ? Math.round(day.temperature_2m_max[0]) : null;
     var lo = day.temperature_2m_min ? Math.round(day.temperature_2m_min[0]) : null;
     elMeta.textContent = (hi !== null ? hi + "° / " + lo + "°" : "") +
                          (c.relative_humidity_2m != null ? " · 湿度 " + c.relative_humidity_2m + "%" : "");
     if (city) wxCityName = city;
-    elCity.textContent = cityLabel();
+    setCity();
     try {
       localStorage.setItem("pcm_wx", JSON.stringify({
         ts: Date.now(), data: j, city: wxCityName, lat: wxLat, lon: wxLon
@@ -308,7 +331,7 @@
     }
     if (city) wxCityName = city;
     if (source) wxSource = source;
-    elCity.textContent = cityLabel();
+    setCity();
   };
 
   // 读取上次缓存，先显示旧数据
@@ -340,7 +363,7 @@
           // 浏览器自己定位成功后，用真实坐标重新取一次天气
           wxLat = p.coords.latitude; wxLon = p.coords.longitude;
           wxSource = "手机定位";
-          elCity.textContent = cityLabel();
+          setCity();
           wxBusy = false;
           scheduleWx(80);
         }, function(){ /* 定位不可用，静默用兜底坐标 */ },
@@ -365,6 +388,7 @@
   /* ==================== 启动 ==================== */
   fitClock();
   tick();
+  setCity();
   // App 里由原生层注入天气；1.4 秒后仍没注入（浏览器直开 / 原生请求失败）才自己拉
   setTimeout(function(){ if (!nativeInjected) scheduleWx(100); }, 1400);
   window.addEventListener("resize", function(){ setTimeout(fitClock, 60); });

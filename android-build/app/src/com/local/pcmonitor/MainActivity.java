@@ -338,6 +338,9 @@ public class MainActivity extends Activity {
                 if (city == null || city.length() == 0) {
                     city = reverseGeocode(l.getLatitude(), l.getLongitude());
                 }
+                if (city == null || city.length() == 0) {
+                    city = osmCity(l.getLatitude(), l.getLongitude());
+                }
                 if (city == null || city.length() == 0 || destroyed) return;
                 final String result = city;
                 handler.post(new Runnable() {
@@ -375,6 +378,39 @@ public class MainActivity extends Activity {
             if (city == null || city.length() == 0) city = jsonString(json, "locality");
             if (city == null || city.length() == 0) city = jsonString(json, "principalSubdivision");
             return city;
+        } catch (Exception ignore) {
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** OSM Nominatim 反向地理编码：最后兜底，尽量保证能显示出城市名 */
+    private static String osmCity(double lat, double lon) {
+        HttpURLConnection conn = null;
+        try {
+            String u = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="
+                + lat + "&lon=" + lon + "&zoom=10&accept-language=zh-CN";
+            conn = (HttpURLConnection) new URL(u).openConnection();
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+            conn.setRequestMethod("GET");
+            conn.setUseCaches(false);
+            conn.setRequestProperty("User-Agent", "PCMonitor/1.3 (offline clock widget)");
+            if (conn.getResponseCode() != 200) return null;
+            java.io.InputStream in = conn.getInputStream();
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[2048];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            String json = bos.toString("UTF-8");
+            String[] keys = {"city", "town", "village", "county", "state_district", "state"};
+            for (String k : keys) {
+                String v = jsonString(json, k);
+                if (v != null && v.length() > 0) return v;
+            }
+            return null;
         } catch (Exception ignore) {
             return null;
         } finally {
