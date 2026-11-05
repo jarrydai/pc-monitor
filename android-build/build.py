@@ -27,8 +27,11 @@ ENV["PYTHONIOENCODING"] = "utf-8"
 
 
 def run(cmd, **kw):
+    # aapt2 / d8 等原生工具在「含非 ASCII 字符的绝对路径」下会打不开资源目录，
+    # 统一转成相对 ROOT 的路径并固定 cwd，绕开这个编码问题。
+    cmd = [c.replace(ROOT + os.sep, "") if isinstance(c, str) else c for c in cmd]
     print("  $ " + " ".join(os.path.basename(c) if i == 0 else c for i, c in enumerate(cmd)))
-    p = subprocess.run(cmd, env=ENV, capture_output=True, text=True,
+    p = subprocess.run(cmd, env=ENV, cwd=ROOT, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", **kw)
     out = (p.stdout or "") + (p.stderr or "")
     if p.returncode != 0:
