@@ -2,6 +2,27 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## v1.0.1 — 2026-11-05
+
+修复 Windows 端口被系统随机占用导致服务启动即报错的问题。
+
+### 修复
+
+- **`WinError 10013` 启动失败**：Hyper-V / WSL 的 `winnat` 服务每次开机可能随机保留一段 TCP 端口，恰好盖住 8000 时绑定被系统拒绝，打包版会弹出错误框并卡住进程。现在自动依次尝试 8001–8020、9001–9020，不再崩溃
+- **单实例检测在端口被保留时失真**：改为以 pid 文件为主判断已有实例，避免误判成「服务已在运行」而直接跳过启动
+- 端口发生变化时写入 `pcmonitor.log`，并弹出托盘气泡提示新的手机访问地址；托盘的「复制地址」「打开监控页面」同步跟随实际端口
+
+### 备注
+
+- 手机端 APK 未改动，内容与 v1.0.0 相同，仅随版本号重新打包
+- 若希望固定占用 8000，可用管理员权限执行一次：
+
+  ```bat
+  net stop winnat
+  netsh int ipv4 add excludedportrange protocol=tcp startport=8000 numberofports=1 store=persistent
+  net start winnat
+  ```
+
 ## v1.0.0 — 2026-11-01
 
 首个公开发行版。

@@ -12,7 +12,7 @@ CPU、GPU、内存、显存、温度、磁盘、网络和占用最高的进程�
 ```
 ┌──────────────────────────────────────────────┐
 │  手机 / 平板浏览器  ── WiFi ──▶  PC 服务端    │
-│  http://192.168.1.107:8000   1 秒刷新一次快照 │
+│  http://<电脑IP>:8000        1 秒刷新一次快照 │
 └──────────────────────────────────────────────┘
 ```
 
@@ -22,12 +22,15 @@ CPU、GPU、内存、显存、温度、磁盘、网络和占用最高的进程�
 
 | 文件 | 平台 | 大小 | 说明 |
 | --- | --- | --- | --- |
-| `PCMonitor-v1.0.0-windows.exe` | Windows 10/11 x64 | 15 MB | 单文件，双击即用，内置网页与温度传感器组件 |
-| `PCMonitor-v1.0.0-windows-full.zip` | Windows 10/11 x64 | 22 MB | 完整分发包，解压后运行 `PCMonitor.exe` |
-| `PCMonitor-v1.0.0-android.apk` | Android 7.0+ | 78 KB | 安卓 App，自签名，安装时允许「未知来源」 |
+| `PCMonitor-v1.0.1-windows.exe` | Windows 10/11 x64 | 15 MB | 单文件，双击即用，内置网页与温度传感器组件 |
+| `PCMonitor-v1.0.1-windows-full.zip` | Windows 10/11 x64 | 22 MB | 完整分发包，解压后运行 `PCMonitor.exe` |
+| `PCMonitor-v1.0.1-android.apk` | Android 7.0+ | 78 KB | 安卓 App，自签名，安装时允许「未知来源」 |
 
 电脑端启动后是静默托盘运行，首次会弹一次 UAC 启用 CPU 温度传感器，点【是】即可。
 手机连同一个 WiFi，打开 `http://<电脑IP>:8000`。
+
+> 默认端口 8000 若被 Windows 的 `winnat` 随机保留（Hyper-V / WSL 常见），程序会自动改用
+> 8001–8020 或 9001–9020，并在托盘气泡与 `pcmonitor.log` 里告知新地址，不会弹错误框。
 
 ## 特性
 
